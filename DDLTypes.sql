@@ -1,0 +1,1 @@
+create type descripcion from nvarchar(300) not null
