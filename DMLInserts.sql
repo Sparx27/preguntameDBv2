@@ -80,3 +80,10 @@ SET NLikes = (
 	from MeGustas m
 	where m.UsuarioId = Usuarios.UsuarioId
 )
+
+UPDATE Respuestas
+SET NLikes = (
+	select count(m.RespuestaId)
+	from MeGustas m
+	where m.RespuestaId = Respuestas.RespuestaId
+)
