@@ -1,2 +1,2 @@
 # PreguntameDBv2
-Solucion hecha en SQL Server Management Studio
+Archivos .sql extraídos de mi solución hecha en SQL Server Management Studio
