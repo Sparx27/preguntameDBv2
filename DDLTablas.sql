@@ -1,5 +1,3 @@
-create database PreguntameDBv2
-
 -- PAIS
 CREATE TABLE Paises(
 	PaisId char(3),
@@ -20,6 +18,7 @@ CREATE TABLE Usuarios(
 	NombreUsuario nvarchar(20) NOT NULL UNIQUE,
 	Nombre nvarchar(20) NOT NULL,
 	Apellido nvarchar(30),
+	NombreCompleto AS (Nombre + ' ' + Apellido) PERSISTED,
 	Foto nvarchar(250),
 	Bio nvarchar(250),
 	CajaPreguntas nvarchar(50),
@@ -38,6 +37,7 @@ CREATE TABLE Usuarios(
 	CONSTRAINT CK_NombreUsuario CHECK(Len(NombreUsuario) > 3),
 	CONSTRAINT FK_Usuario_Pais FOREIGN KEY(PaisId) REFERENCES Paises(PaisId)
 )
+CREATE INDEX IX_Usuarios_NombreCompleto on Usuarios(NombreCompleto)
 -- FIN USUARIO
 
 
@@ -81,7 +81,7 @@ CREATE INDEX IX_FK_Respuesta_PreId ON Respuestas(PreguntaId)
 CREATE TABLE Seguimientos(
 	Usuario_Seguido uniqueidentifier,
 	Usuario_Seguidor uniqueidentifier,
-	Existe bit default 1,
+	Fecha datetime DEFAULT GETDATE() NOT NULL,
 
 	CONSTRAINT PK_Seguimientos PRIMARY KEY(Usuario_Seguido, Usuario_Seguidor),
 	CONSTRAINT FK_Seguimiento_Usuario_Seguido FOREIGN KEY(Usuario_Seguido)
@@ -90,14 +90,13 @@ CREATE TABLE Seguimientos(
 		REFERENCES Usuarios(UsuarioId)
 )
 -- FIN SEGUIMIENTO
-alter table seguimientos
-drop column existe
+
 
 -- MEGUSTA
 CREATE TABLE MeGustas(
 	RespuestaId uniqueidentifier,
 	UsuarioId uniqueidentifier,
-	Existe bit default 1,
+	Fecha datetime DEFAULT GETDATE() NOT NULL,
 
 	CONSTRAINT PK_MeGustas PRIMARY KEY(RespuestaId, UsuarioId),
 	CONSTRAINT FK_MeGustas_Respuestas FOREIGN KEY(RespuestaId) 

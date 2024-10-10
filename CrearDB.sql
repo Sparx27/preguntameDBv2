@@ -1,6 +1,13 @@
 USE master
 GO
 
+-- Eliminar la base de datos si ya existe
+IF EXISTS (SELECT name FROM sys.databases WHERE name = 'PreguntameDBv2')
+BEGIN
+    ALTER DATABASE PreguntameDBv2 SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+    DROP DATABASE PreguntameDBv2;
+END
+
 CREATE DATABASE PreguntameDBv2
 GO
 
@@ -29,6 +36,7 @@ CREATE TABLE Usuarios(
 	NombreUsuario nvarchar(20) NOT NULL UNIQUE,
 	Nombre nvarchar(20) NOT NULL,
 	Apellido nvarchar(30),
+	NombreCompleto AS (Nombre + ' ' + Apellido) PERSISTED,
 	Foto nvarchar(250),
 	Bio nvarchar(250),
 	CajaPreguntas nvarchar(50),
@@ -47,6 +55,8 @@ CREATE TABLE Usuarios(
 	CONSTRAINT CK_NombreUsuario CHECK(Len(NombreUsuario) > 3),
 	CONSTRAINT FK_Usuario_Pais FOREIGN KEY(PaisId) REFERENCES Paises(PaisId)
 )
+GO
+CREATE INDEX IX_Usuarios_NombreCompleto on Usuarios(NombreCompleto)
 GO
 
 CREATE TABLE Preguntas(
