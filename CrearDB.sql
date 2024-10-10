@@ -56,6 +56,8 @@ CREATE TABLE Usuarios(
 	CONSTRAINT FK_Usuario_Pais FOREIGN KEY(PaisId) REFERENCES Paises(PaisId)
 )
 GO
+CREATE INDEX IX_Usuarios_NombreUsuario on Usuarios(NombreUsuario)
+GO
 CREATE INDEX IX_Usuarios_NombreCompleto on Usuarios(NombreCompleto)
 GO
 
@@ -136,7 +138,9 @@ CREATE TABLE Notificaciones(
 	CONSTRAINT FK_Notificaciones_Seguimientos FOREIGN KEY(S_Usuario_Seguido, S_Usuario_Seguidor)
 		REFERENCES Seguimientos(Usuario_Seguido, Usuario_Seguidor),
 	CONSTRAINT FK_Notificaciones_MeGustas FOREIGN KEY(M_RespuestaId, M_UsuarioId)
-		REFERENCES MeGustas(RespuestaId, UsuarioId)
+		REFERENCES MeGustas(RespuestaId, UsuarioId),
+	CONSTRAINT UQ_Notificaciones_Seguimientos UNIQUE (S_Usuario_Seguido, S_Usuario_Seguidor, Tipo),
+	CONSTRAINT UQ_Notificaciones_MeGustas UNIQUE (M_RespuestaId, M_UsuarioId, Tipo)
 )
 GO
 CREATE INDEX IX_Notificaciones_UsuarioId ON Notificaciones(UsuarioId)
@@ -291,3 +295,49 @@ SET NLikes = (
 )
 GO
 -- FIN INSERTS --
+
+
+-- STORED PROCEDURES --
+CREATE PROCEDURE SP_S_Seguidores (@NombreUsuario nvarchar(20))
+AS
+	SELECT u.NombreUsuario, u.NombreCompleto, u.Foto
+	FROM Usuarios u
+	JOIN Seguimientos s on s.Usuario_Seguidor = u.UsuarioId
+	JOIN Usuarios uSeguido on uSeguido.UsuarioId = s.Usuario_Seguido
+	WHERE uSeguido.NombreUsuario = @NombreUsuario
+GO
+
+CREATE PROCEDURE SP_S_Respuesta_MeGustas_Usuarios (@RespuestaId uniqueidentifier)
+AS
+	SELECT u.NombreUsuario, u.NombreCompleto, u.Foto
+	FROM Usuarios u
+	JOIN MeGustas m on m.UsuarioId = u.UsuarioId
+	WHERE m.RespuestaId = @RespuestaId
+GO
+
+CREATE PROCEDURE SP_S_TopUsuariosActivos(@Dias int = 1, @Cantidad int = 5)
+AS
+	SELECT TOP (@Cantidad)
+	u.UsuarioId, 
+	u.NombreUsuario, 
+	ISNULL(nmegustas.nm, 0) as MeGustas, 
+  ISNULL(nseguimientos.ns, 0) as Seguimientos,
+	ISNULL(nmegustas.nm + nseguimientos.ns, 0) as Interacciones
+	FROM usuarios u
+	left join (
+		select u.UsuarioId as mu, count(m.UsuarioId) as nm
+		from Usuarios u
+		join MeGustas m on u.UsuarioId = m.UsuarioId
+		where m.Fecha >= DATEADD(DAY, -1 * @Dias, GETDATE()) --Por defecto, los dados en el mismo día
+		group by u.UsuarioId
+	) as nmegustas on nmegustas.mu = u.usuarioid
+	left join (
+		select u.UsuarioId as su, count(s.Usuario_Seguidor) as ns
+		from Usuarios u
+		join Seguimientos s on s.Usuario_Seguidor = u.UsuarioId
+		where s.Fecha >= DATEADD(DAY, -1 * @Dias, GETDATE()) --Por defecto, los dados en el mismo día
+		group by u.UsuarioId
+	) as nseguimientos on nseguimientos.su = u.UsuarioId
+	order by Interacciones desc, u.NombreUsuario
+GO
+-- FIN STORED PROCEDURES -- 

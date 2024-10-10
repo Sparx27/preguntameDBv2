@@ -37,6 +37,7 @@ CREATE TABLE Usuarios(
 	CONSTRAINT CK_NombreUsuario CHECK(Len(NombreUsuario) > 3),
 	CONSTRAINT FK_Usuario_Pais FOREIGN KEY(PaisId) REFERENCES Paises(PaisId)
 )
+CREATE INDEX IX_Usuarios_NombreUsuario on Usuarios(NombreUsuario)
 CREATE INDEX IX_Usuarios_NombreCompleto on Usuarios(NombreCompleto)
 -- FIN USUARIO
 
@@ -128,7 +129,13 @@ CREATE TABLE Notificaciones(
 	CONSTRAINT FK_Notificaciones_Seguimientos FOREIGN KEY(S_Usuario_Seguido, S_Usuario_Seguidor)
 		REFERENCES Seguimientos(Usuario_Seguido, Usuario_Seguidor),
 	CONSTRAINT FK_Notificaciones_MeGustas FOREIGN KEY(M_RespuestaId, M_UsuarioId)
-		REFERENCES MeGustas(RespuestaId, UsuarioId)
+		REFERENCES MeGustas(RespuestaId, UsuarioId),
+
+	-- Asegurar una sola notificación por Seguimiento
+	CONSTRAINT UQ_Notificaciones_Seguimientos UNIQUE (S_Usuario_Seguido, S_Usuario_Seguidor, Tipo),
+
+	-- Asegurar una sola notificación por MeGusta
+	CONSTRAINT UQ_Notificaciones_MeGustas UNIQUE (M_RespuestaId, M_UsuarioId, Tipo)
 )
 CREATE INDEX IX_Notificaciones_UsuarioId ON Notificaciones(UsuarioId)
 CREATE INDEX IX_Notificaciones_S_Usuario_Seguido ON Notificaciones(S_Usuario_Seguido)
