@@ -1,3 +1,148 @@
+USE master
+GO
+
+CREATE DATABASE PreguntameDBv2
+GO
+
+USE "PreguntameDBv2"
+GO
+
+-- CREAR TYPES --
+create type descripcion from nvarchar(300) not null
+GO
+
+-- CREAR TABLAS --
+CREATE TABLE Paises(
+	PaisId char(3),
+	Nombre nvarchar(50) NOT NULL,
+
+	CONSTRAINT PK_Paises PRIMARY KEY(PaisId)
+)
+GO
+
+CREATE TABLE Usuarios(
+	UsuarioId uniqueidentifier DEFAULT NEWID(),
+	Confirmado bit DEFAULT 0,
+	Activo bit DEFAULT 0,
+	Email nvarchar(100) NOT NULL UNIQUE,
+	Contrasena nvarchar(70) NOT NULL,
+	NombreUsuario nvarchar(20) NOT NULL UNIQUE,
+	Nombre nvarchar(20) NOT NULL,
+	Apellido nvarchar(30),
+	Foto nvarchar(250),
+	Bio nvarchar(250),
+	CajaPreguntas nvarchar(50),
+	NLikes int DEFAULT 0 NOT NULL,
+	NSeguidores int DEFAULT 0 NOT NULL,
+	PaisId char(3) NOT NULL,
+	
+	CONSTRAINT PK_Usuarios PRIMARY KEY(UsuarioId),
+	CONSTRAINT CK_ConfirmadoActivo CHECK((Confirmado = 1 OR Activo = 0)),
+	CONSTRAINT CK_Contrasena CHECK(
+		Contrasena like '%[a-z]%' AND
+		Contrasena like '%[A-Z]%' AND
+		Contrasena like '%[0-9]%' AND
+		LEN(Contrasena) >= 6
+	),
+	CONSTRAINT CK_NombreUsuario CHECK(Len(NombreUsuario) > 3),
+	CONSTRAINT FK_Usuario_Pais FOREIGN KEY(PaisId) REFERENCES Paises(PaisId)
+)
+GO
+
+CREATE TABLE Preguntas(
+	PreguntaId uniqueidentifier DEFAULT NEWID(),
+	Usuario_Recibe uniqueidentifier NOT NULL,
+	Usuario_Envia uniqueidentifier,
+	Dsc descripcion,
+	Fecha datetime DEFAULT GETDATE() NOT NULL,
+	Estado bit DEFAULT 0 NOT NULL,
+
+	CONSTRAINT PK_Preguntas PRIMARY KEY(PreguntaId),
+	CONSTRAINT FK_Pregunta_UsuRecibe FOREIGN KEY(Usuario_Recibe) REFERENCES Usuarios(UsuarioId),
+	CONSTRAINT FK_Pregunta_UsuEnvia FOREIGN KEY(Usuario_Envia) REFERENCES Usuarios(UsuarioId)
+)
+CREATE INDEX IX_FK_Pregunta_Usuario_Recibe ON Preguntas(Usuario_Recibe)
+CREATE INDEX IX_FK_Pregunta_Usuario_Envia ON Preguntas(Usuario_Envia)
+GO
+
+CREATE TABLE Respuestas(
+	RespuestaId uniqueidentifier DEFAULT NEWID(),
+	PreguntaId uniqueidentifier NOT NULL,
+	Dsc descripcion,
+	Fecha datetime DEFAULT GETDATE() NOT NULL,
+	NLikes int DEFAULT 0 NOT NULL,
+
+	CONSTRAINT PK_Respuestas PRIMARY KEY(RespuestaId),
+	CONSTRAINT UQ_PreguntaId UNIQUE(PreguntaId),
+	CONSTRAINT FK_Respuestas_Preguntas FOREIGN KEY(PreguntaId) REFERENCES Preguntas(PreguntaId)
+)
+GO
+CREATE INDEX IX_FK_Respuesta_PreId ON Respuestas(PreguntaId)
+GO
+
+CREATE TABLE Seguimientos(
+	Usuario_Seguido uniqueidentifier,
+	Usuario_Seguidor uniqueidentifier,
+	Fecha datetime DEFAULT GETDATE() NOT NULL,
+
+	CONSTRAINT PK_Seguimientos PRIMARY KEY(Usuario_Seguido, Usuario_Seguidor),
+	CONSTRAINT FK_Seguimiento_Usuario_Seguido FOREIGN KEY(Usuario_Seguido)
+		REFERENCES Usuarios(UsuarioId),
+	CONSTRAINT FK_Seguimiento_Usuario_Seguidor FOREIGN KEY(Usuario_Seguidor)
+		REFERENCES Usuarios(UsuarioId)
+)
+GO
+
+CREATE TABLE MeGustas(
+	RespuestaId uniqueidentifier,
+	UsuarioId uniqueidentifier,
+	Fecha datetime DEFAULT GETDATE() NOT NULL,
+
+	CONSTRAINT PK_MeGustas PRIMARY KEY(RespuestaId, UsuarioId),
+	CONSTRAINT FK_MeGustas_Respuestas FOREIGN KEY(RespuestaId) 
+		REFERENCES Respuestas(RespuestaId),
+	CONSTRAINT FK_MeGustas_Usuarios FOREIGN KEY(UsuarioId)
+		REFERENCES Usuarios(UsuarioId)
+)
+GO
+
+CREATE TABLE Notificaciones(
+	NotificacionId uniqueidentifier DEFAULT NEWID(),
+	UsuarioId uniqueidentifier,
+	Estado bit DEFAULT 0 NOT NULL,
+	Fecha datetime DEFAULT GETDATE() NOT NULL,
+	Tipo char(1) NOT NULL,
+	S_Usuario_Seguido uniqueidentifier,
+	S_Usuario_Seguidor uniqueidentifier,
+	M_RespuestaId uniqueidentifier,
+	M_UsuarioId uniqueidentifier,
+
+	CONSTRAINT PK_Notificaciones PRIMARY KEY(NotificacionId, UsuarioId),
+	CONSTRAINT FK_Notificaciones_Usuarios FOREIGN KEY(UsuarioId)
+		REFERENCES Usuarios(UsuarioId),
+	CONSTRAINT CK_Tipo CHECK(Tipo IN ('S', 'M')),
+	CONSTRAINT CK_Tipo_Seguimiento CHECK (Tipo != 'S' OR S_Usuario_Seguidor IS NOT NULL),
+	CONSTRAINT CK_Tipo_MeGusta CHECK (Tipo != 'M' OR M_RespuestaId IS NOT NULL),
+	CONSTRAINT FK_Notificaciones_Seguimientos FOREIGN KEY(S_Usuario_Seguido, S_Usuario_Seguidor)
+		REFERENCES Seguimientos(Usuario_Seguido, Usuario_Seguidor),
+	CONSTRAINT FK_Notificaciones_MeGustas FOREIGN KEY(M_RespuestaId, M_UsuarioId)
+		REFERENCES MeGustas(RespuestaId, UsuarioId)
+)
+GO
+CREATE INDEX IX_Notificaciones_UsuarioId ON Notificaciones(UsuarioId)
+GO
+CREATE INDEX IX_Notificaciones_S_Usuario_Seguido ON Notificaciones(S_Usuario_Seguido)
+GO
+CREATE INDEX IX_Notificaciones_S_Usuario_Seguidor ON Notificaciones(S_Usuario_Seguidor)
+GO
+CREATE INDEX IX_Notificaciones_M_RespuestaId ON Notificaciones(M_RespuestaId)
+GO
+CREATE INDEX IX_Notificaciones_M_UsuarioId ON Notificaciones(M_UsuarioId)
+GO
+-- FIN CREAR TABLAS --
+
+
+-- INSERTS --
 INSERT INTO Paises VALUES
 ('URU', 'Uruguay'),
 ('ARG', 'Argentina'),
@@ -5,7 +150,7 @@ INSERT INTO Paises VALUES
 ('PER', 'Perú'),
 ('COL', 'Colombia'),
 ('ESP', 'España')
-
+GO
 
 INSERT INTO Usuarios
 	(UsuarioId, Confirmado, Activo, Email, NombreUsuario, Contrasena, Nombre, Apellido, PaisId)
@@ -15,9 +160,7 @@ VALUES
 	('DCC4BFC3-CA7D-4904-BDE9-D65A8C85FC7F', 1, 1, 'san25de25prueba252@gmail.com', 'sanben', 'Prueba123', 'Santiago', 'Benites', 'URU'),
 	('7D8E65EA-AE06-4994-A962-EC04468A23DB', 1, 1, 'vic25de25prueba252@gmail.com', 'vicu', 'Prueba123', 'Victoria', 'Correa', 'ARG'),
 	('984296BE-CFB8-4F07-868C-88E68B09C76F', 1, 1, 'jho25de25prueba252@gmail.com', 'jdoe', 'Prueba123', 'Jhon', 'Doe', 'ESP')
-
-
-
+GO
 
 INSERT INTO Preguntas(PreguntaId, Usuario_Envia, Usuario_Recibe, Dsc) VALUES
 (
@@ -55,7 +198,7 @@ INSERT INTO Preguntas(PreguntaId, Usuario_Envia, Usuario_Recibe, Dsc) VALUES
 	'7D8E65EA-AE06-4994-A962-EC04468A23DB', 'DCC4BFC3-CA7D-4904-BDE9-D65A8C85FC7F', 
 	'¿Cuál es tu plato favorito y qué lo hace especial para ti?'
 )
-
+GO
 
 INSERT INTO Respuestas(RespuestaId, PreguntaId, Dsc) VALUES
 (
@@ -78,6 +221,7 @@ INSERT INTO Respuestas(RespuestaId, PreguntaId, Dsc) VALUES
 	'32CCA49F-F83B-40A2-8BD0-B5F22DDD56F7', 
 	'4ECD7A23-7688-4977-A2AE-D9687130BFAF', 'Todo lo bueno que quieras lograr en la vida, va a requerir en menor o mayor medida de tu autodisciplina.'
 )
+GO
 
 UPDATE Preguntas
 SET Estado = 1
@@ -86,7 +230,7 @@ WHERE Preguntas.PreguntaId IN (
 	from Preguntas p
 	join Respuestas r on r.PreguntaId = p.PreguntaId
 )
-
+GO
 
 INSERT INTO Seguimientos(Usuario_Seguido, Usuario_Seguidor) VALUES
 ('C1D151D6-32EB-462E-9163-B62420940AA3', '7D8E65EA-AE06-4994-A962-EC04468A23DB'),
@@ -98,6 +242,7 @@ INSERT INTO Seguimientos(Usuario_Seguido, Usuario_Seguidor) VALUES
 ('984296BE-CFB8-4F07-868C-88E68B09C76F', '7D8E65EA-AE06-4994-A962-EC04468A23DB'),
 ('1FD2C01B-F0C8-48F7-AFD1-67563ADC071A', 'DCC4BFC3-CA7D-4904-BDE9-D65A8C85FC7F'),
 ('7D8E65EA-AE06-4994-A962-EC04468A23DB', 'DCC4BFC3-CA7D-4904-BDE9-D65A8C85FC7F')
+GO
 
 UPDATE Usuarios
 SET NSeguidores = (
@@ -105,8 +250,8 @@ SET NSeguidores = (
 	from Seguimientos s
 	where s.Usuario_Seguido = Usuarios.UsuarioId
 )
+GO
 
-select * from Usuarios
 INSERT INTO MeGustas(RespuestaId, UsuarioId) VALUES
 ('B97CFFF5-2FF4-4D71-9B28-38E62EDB2B8D', '1FD2C01B-F0C8-48F7-AFD1-67563ADC071A'),
 ('B97CFFF5-2FF4-4D71-9B28-38E62EDB2B8D', '984296BE-CFB8-4F07-868C-88E68B09C76F'),
@@ -118,6 +263,7 @@ INSERT INTO MeGustas(RespuestaId, UsuarioId) VALUES
 ('D44DF95C-4CB6-4B5C-978C-CFDECD79CB73', 'DCC4BFC3-CA7D-4904-BDE9-D65A8C85FC7F'),
 ('A50E8B78-43A2-4230-A53E-D0D534306BFA', 'DCC4BFC3-CA7D-4904-BDE9-D65A8C85FC7F'),
 ('A50E8B78-43A2-4230-A53E-D0D534306BFA', '7D8E65EA-AE06-4994-A962-EC04468A23DB')
+GO
 
 UPDATE Usuarios
 SET NLikes = (
@@ -125,6 +271,7 @@ SET NLikes = (
 	from MeGustas m
 	where m.UsuarioId = Usuarios.UsuarioId
 )
+GO
 
 UPDATE Respuestas
 SET NLikes = (
@@ -132,3 +279,5 @@ SET NLikes = (
 	from MeGustas m
 	where m.RespuestaId = Respuestas.RespuestaId
 )
+GO
+-- FIN INSERTS --

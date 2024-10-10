@@ -15,8 +15,9 @@ CREATE TABLE Usuarios(
 	UsuarioId uniqueidentifier DEFAULT NEWID(),
 	Confirmado bit DEFAULT 0,
 	Activo bit DEFAULT 0,
-	Email nvarchar(150) NOT NULL,
+	Email nvarchar(100) NOT NULL UNIQUE,
 	Contrasena nvarchar(70) NOT NULL,
+	NombreUsuario nvarchar(20) NOT NULL UNIQUE,
 	Nombre nvarchar(20) NOT NULL,
 	Apellido nvarchar(30),
 	Foto nvarchar(250),
@@ -34,6 +35,7 @@ CREATE TABLE Usuarios(
 		Contrasena like '%[0-9]%' AND
 		LEN(Contrasena) >= 6
 	),
+	CONSTRAINT CK_NombreUsuario CHECK(Len(NombreUsuario) > 3),
 	CONSTRAINT FK_Usuario_Pais FOREIGN KEY(PaisId) REFERENCES Paises(PaisId)
 )
 -- FIN USUARIO
@@ -88,9 +90,10 @@ CREATE TABLE Seguimientos(
 		REFERENCES Usuarios(UsuarioId)
 )
 -- FIN SEGUIMIENTO
+alter table seguimientos
+drop column existe
 
-
---MEGUSTA
+-- MEGUSTA
 CREATE TABLE MeGustas(
 	RespuestaId uniqueidentifier,
 	UsuarioId uniqueidentifier,
@@ -102,6 +105,37 @@ CREATE TABLE MeGustas(
 	CONSTRAINT FK_MeGustas_Usuarios FOREIGN KEY(UsuarioId)
 		REFERENCES Usuarios(UsuarioId)
 )
---FIN MEGUSTA
+-- FIN MEGUSTA
+
+
+-- NOTIFICACIONES
+CREATE TABLE Notificaciones(
+	NotificacionId uniqueidentifier DEFAULT NEWID(),
+	UsuarioId uniqueidentifier,
+	Estado bit DEFAULT 0 NOT NULL,
+	Fecha datetime DEFAULT GETDATE() NOT NULL,
+	Tipo char(1) NOT NULL,
+	S_Usuario_Seguido uniqueidentifier,
+	S_Usuario_Seguidor uniqueidentifier,
+	M_RespuestaId uniqueidentifier,
+	M_UsuarioId uniqueidentifier,
+
+	CONSTRAINT PK_Notificaciones PRIMARY KEY(NotificacionId, UsuarioId),
+	CONSTRAINT FK_Notificaciones_Usuarios FOREIGN KEY(UsuarioId)
+		REFERENCES Usuarios(UsuarioId),
+	CONSTRAINT CK_Tipo CHECK(Tipo IN ('S', 'M')),
+	CONSTRAINT CK_Tipo_Seguimiento CHECK (Tipo != 'S' OR S_Usuario_Seguidor IS NOT NULL),
+	CONSTRAINT CK_Tipo_MeGusta CHECK (Tipo != 'M' OR M_RespuestaId IS NOT NULL),
+	CONSTRAINT FK_Notificaciones_Seguimientos FOREIGN KEY(S_Usuario_Seguido, S_Usuario_Seguidor)
+		REFERENCES Seguimientos(Usuario_Seguido, Usuario_Seguidor),
+	CONSTRAINT FK_Notificaciones_MeGustas FOREIGN KEY(M_RespuestaId, M_UsuarioId)
+		REFERENCES MeGustas(RespuestaId, UsuarioId)
+)
+CREATE INDEX IX_Notificaciones_UsuarioId ON Notificaciones(UsuarioId)
+CREATE INDEX IX_Notificaciones_S_Usuario_Seguido ON Notificaciones(S_Usuario_Seguido)
+CREATE INDEX IX_Notificaciones_S_Usuario_Seguidor ON Notificaciones(S_Usuario_Seguidor)
+CREATE INDEX IX_Notificaciones_M_RespuestaId ON Notificaciones(M_RespuestaId)
+CREATE INDEX IX_Notificaciones_M_UsuarioId ON Notificaciones(M_UsuarioId)
+-- FIN NOTIFICACIONES
 
 -- --FIN INTERACCIONES-- --
