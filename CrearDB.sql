@@ -155,6 +155,222 @@ CREATE INDEX IX_Notificaciones_M_UsuarioId ON Notificaciones(M_UsuarioId)
 GO
 -- FIN CREAR TABLAS --
 
+-- FUNCTIONS --
+CREATE FUNCTION F_ContarMeGustasDadosPorNombreUsuario (@NombreUsuario nvarchar(20), @Dias int = 7)
+RETURNS int
+AS
+BEGIN
+	RETURN (
+		select count(m.UsuarioId)
+		from Usuarios u
+		join MeGustas m on u.UsuarioId = m.UsuarioId
+		where m.Fecha >= DATEADD(DAY, -1 * @Dias, GETDATE()) --Por defecto, los dados en la última semana
+			and u.NombreUsuario = @NombreUsuario
+	)
+END
+GO
+
+CREATE FUNCTION F_ContarSeguimientosDadosPorNombreUsuario (@NombreUsuario nvarchar(20), @Dias int = 7)
+RETURNS int
+AS
+BEGIN
+	RETURN (
+		select count(s.Usuario_Seguidor)
+		from Usuarios u
+		join Seguimientos s on s.Usuario_Seguidor = u.UsuarioId
+		where s.Fecha >= DATEADD(DAY, -1 * @Dias, GETDATE()) --Por defecto, los dados en la última semana
+			and u.NombreUsuario = @NombreUsuario
+	)
+END
+GO
+-- FIN FUNCTIONS --
+
+
+-- STORED PROCEDURES --
+CREATE PROCEDURE SP_S_Seguidores (@NombreUsuario nvarchar(20))
+AS
+BEGIN
+	SET NOCOUNT ON
+
+	SELECT u.NombreUsuario, u.NombreCompleto, u.Foto
+	FROM Usuarios u
+	JOIN Seguimientos s on s.Usuario_Seguidor = u.UsuarioId
+	JOIN Usuarios uSeguido on uSeguido.UsuarioId = s.Usuario_Seguido
+	WHERE uSeguido.NombreUsuario = @NombreUsuario
+END
+GO
+
+CREATE PROCEDURE SP_S_Respuesta_MeGustas_Usuarios (@RespuestaId uniqueidentifier)
+AS
+BEGIN
+	SET NOCOUNT ON
+
+	SELECT u.NombreUsuario, u.NombreCompleto, u.Foto
+	FROM Usuarios u
+	JOIN MeGustas m on m.UsuarioId = u.UsuarioId
+	WHERE m.RespuestaId = @RespuestaId
+END
+GO
+
+CREATE PROCEDURE SP_S_TopUsuariosActivos(@Dias int = 7, @Cantidad int = 5)
+AS
+BEGIN
+	SET NOCOUNT ON
+
+	select top (@Cantidad)
+		u.UsuarioId, 
+		u.NombreUsuario, 
+		dbo.F_ContarMeGustasDadosPorNombreUsuario(u.NombreUsuario, @Dias) as MeGustas, 
+		dbo.F_ContarSeguimientosDadosPorNombreUsuario(u.NombreUsuario, @Dias) as Seguimientos,
+		(dbo.F_ContarMeGustasDadosPorNombreUsuario(u.NombreUsuario, @Dias) + 
+			dbo.F_ContarSeguimientosDadosPorNombreUsuario(u.NombreUsuario, @Dias)) as Interacciones
+	from usuarios u
+	order by Interacciones desc, u.NombreUsuario
+END
+GO
+
+CREATE PROCEDURE SP_T_Toggle_MeGusta_Respuesta (@RespuestaId uniqueidentifier, @NombreUsuario nvarchar(20))
+AS
+BEGIN
+	SET NOCOUNT ON
+
+	BEGIN TRY
+		IF EXISTS (select 1 from Respuestas where RespuestaId = @RespuestaId) AND
+			 EXISTS (select 1 from Usuarios where NombreUsuario = @NombreUsuario)
+		BEGIN
+
+			--Obtengo y guardo el UsuarioId que pertenece a ese NombreUsuario, facilita el manejo de las tablas
+			DECLARE @UsuarioId uniqueidentifier
+			SET @UsuarioId = (select UsuarioId from Usuarios where NombreUsuario = @NombreUsuario)
+
+			-- Caso Usuario da un Like a Respuesta
+			IF NOT EXISTS (select 1 from MeGustas where RespuestaId = @RespuestaId and UsuarioId = @UsuarioId)
+			BEGIN
+				BEGIN TRANSACTION
+
+					Insert into MeGustas(RespuestaId, UsuarioId)
+					select @RespuestaId, UsuarioId from Usuarios where NombreUsuario = @NombreUsuario
+
+					Update Respuestas
+					set NLikes = Nlikes + 1
+					where	Respuestas.RespuestaId = @RespuestaId
+
+					Update Usuarios
+					set NLikes = NLikes + 1
+					where UsuarioId = (
+						select p.Usuario_Recibe
+						from Preguntas p
+						join Respuestas r on r.PreguntaId = p.PreguntaId
+						where r.RespuestaId = @RespuestaId
+					)
+
+				COMMIT TRANSACTION
+				Print 'Se agregó MeGusta correctamente'
+			END
+
+			-- Si no es el Primer escenario, entonces significa que el MeGusta existe y se debe eliminar
+			ELSE
+				BEGIN
+					BEGIN TRANSACTION
+				
+					Delete from MeGustas
+					where RespuestaId = @RespuestaId and UsuarioId = @UsuarioId
+
+					Update Respuestas
+					set NLikes = NLikes - 1
+					where RespuestaId = @RespuestaId
+
+					Update Usuarios
+					set NLikes = NLikes - 1
+					where UsuarioId = (
+						select p.Usuario_Recibe
+						from Preguntas p
+						join Respuestas r on r.PreguntaId = p.PreguntaId
+						where r.RespuestaId = @RespuestaId
+					)
+
+					COMMIT TRANSACTION
+					Print 'Se quitó MeGusta correctamente'
+				END
+		END -- Del primer IF
+		ELSE
+			PRINT 'No existe una Respuesta por esa RespuestaId o no existe un Usuario por ese UsuarioId'
+	END TRY
+
+	BEGIN CATCH
+		IF @@TRANCOUNT > 0 
+		BEGIN
+			ROLLBACK TRANSACTION
+			Print 'Error en la ejecución'
+		END
+	END CATCH
+END
+GO
+
+CREATE PROCEDURE SP_T_Toggle_SeguimientoEntre_Usuarios (@UsuarioSeguido nvarchar(20), @UsuarioSeguidor nvarchar(20))
+AS
+BEGIN
+	SET NOCOUNT ON
+
+	BEGIN TRY
+		IF EXISTS(select 1 from Usuarios where NombreUsuario = @UsuarioSeguido) AND
+			 EXISTS(select 1 from Usuarios where NombreUsuario = @UsuarioSeguidor) AND
+			 @UsuarioSeguido != @UsuarioSeguidor
+		BEGIN
+			
+			-- Guardo los UsuarioIds de ambos para facilitar el manejo de tablas
+			DECLARE @UsuarioSeguidoId uniqueidentifier
+			SET @UsuarioSeguidoId = (select UsuarioId from Usuarios where NombreUsuario = @UsuarioSeguido)
+			DECLARE @UsuarioSeguidorId uniqueidentifier
+			SET @UsuarioSeguidorId = (select UsuarioId from Usuarios where NombreUsuario = @UsuarioSeguidor)
+
+			-- Caso en que un Usuario sigue a otro Usuario
+			IF NOT EXISTS(select 1 from Seguimientos where Usuario_Seguido = @UsuarioSeguidoId and Usuario_Seguidor = @UsuarioSeguidorId)
+			BEGIN
+				BEGIN TRANSACTION
+
+					Insert into Seguimientos(Usuario_Seguido, Usuario_Seguidor)
+					values(@UsuarioSeguidoId, @UsuarioSeguidorId)
+
+					Update Usuarios
+					set NSeguidores = NSeguidores + 1
+					where UsuarioId = @UsuarioSeguidoId
+
+				COMMIT TRANSACTION
+				PRINT 'Seguimiento realizado correctamente'
+			END
+
+			-- El otro escenario es que si exista el Seguimiento, y un Usuario deja de seguir a otro Usuario
+			ELSE
+			BEGIN
+				BEGIN TRANSACTION
+
+					Delete from Seguimientos
+					where Usuario_Seguido = @UsuarioSeguidoId and Usuario_Seguidor = @UsuarioSeguidorId
+
+					Update Usuarios
+					set NSeguidores = NSeguidores - 1
+					where UsuarioId = @UsuarioSeguidoId
+
+				COMMIT TRANSACTION
+				PRINT 'Seguimiento eliminado correctamente'
+			END
+
+		END
+		ELSE
+			PRINT 'Uno o ambos Nombres de Usuario, no pertenecen a Usuarios'
+	END TRY
+
+	BEGIN CATCH
+		IF @@TRANCOUNT > 0
+		BEGIN
+			ROLLBACK TRANSACTION
+			PRINT 'Error en la ejecución'
+		END
+	END CATCH
+END
+GO
+-- FIN STORED PROCEDURES -- 
 
 -- INSERTS --
 INSERT INTO Paises VALUES
@@ -293,51 +509,4 @@ SET NLikes = (
 	from MeGustas m
 	where m.RespuestaId = Respuestas.RespuestaId
 )
-GO
 -- FIN INSERTS --
-
-
--- STORED PROCEDURES --
-CREATE PROCEDURE SP_S_Seguidores (@NombreUsuario nvarchar(20))
-AS
-	SELECT u.NombreUsuario, u.NombreCompleto, u.Foto
-	FROM Usuarios u
-	JOIN Seguimientos s on s.Usuario_Seguidor = u.UsuarioId
-	JOIN Usuarios uSeguido on uSeguido.UsuarioId = s.Usuario_Seguido
-	WHERE uSeguido.NombreUsuario = @NombreUsuario
-GO
-
-CREATE PROCEDURE SP_S_Respuesta_MeGustas_Usuarios (@RespuestaId uniqueidentifier)
-AS
-	SELECT u.NombreUsuario, u.NombreCompleto, u.Foto
-	FROM Usuarios u
-	JOIN MeGustas m on m.UsuarioId = u.UsuarioId
-	WHERE m.RespuestaId = @RespuestaId
-GO
-
-CREATE PROCEDURE SP_S_TopUsuariosActivos(@Dias int = 1, @Cantidad int = 5)
-AS
-	SELECT TOP (@Cantidad)
-	u.UsuarioId, 
-	u.NombreUsuario, 
-	ISNULL(nmegustas.nm, 0) as MeGustas, 
-  ISNULL(nseguimientos.ns, 0) as Seguimientos,
-	ISNULL(nmegustas.nm + nseguimientos.ns, 0) as Interacciones
-	FROM usuarios u
-	left join (
-		select u.UsuarioId as mu, count(m.UsuarioId) as nm
-		from Usuarios u
-		join MeGustas m on u.UsuarioId = m.UsuarioId
-		where m.Fecha >= DATEADD(DAY, -1 * @Dias, GETDATE()) --Por defecto, los dados en el mismo día
-		group by u.UsuarioId
-	) as nmegustas on nmegustas.mu = u.usuarioid
-	left join (
-		select u.UsuarioId as su, count(s.Usuario_Seguidor) as ns
-		from Usuarios u
-		join Seguimientos s on s.Usuario_Seguidor = u.UsuarioId
-		where s.Fecha >= DATEADD(DAY, -1 * @Dias, GETDATE()) --Por defecto, los dados en el mismo día
-		group by u.UsuarioId
-	) as nseguimientos on nseguimientos.su = u.UsuarioId
-	order by Interacciones desc, u.NombreUsuario
-GO
--- FIN STORED PROCEDURES -- 
