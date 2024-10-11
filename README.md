@@ -14,4 +14,4 @@ Ej: transacción para cuando se inserta un MeGusta, se hacen los updates necesar
 Ej: contar MeGustas y Seguimientos hechos por un Usuario => utilizada en un SP que selecciona a los Usuarios más activos en los últimos 7 días.
 
 * **Triggers**  
-Ej: cuando un Usuario su atributo Confirmado de 0 a 1, su atributo Activo pasa de 0 a 1 también.
+Ej: cuando en un Usuario su atributo Confirmado de 0 a 1, su atributo Activo pasa de 0 a 1 también.
