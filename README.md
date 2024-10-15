@@ -19,5 +19,5 @@ Ej: cuando en un Usuario, su atributo Confirmado pasa de 0 a 1, su atributo Acti
 * **Jobs**  
 Ej: Para eliminar Notificaciones que ya hayan sido vistas y haya pasado un cierto tiempo.
 
-* **Script para crear la base de datos desde cero**  
+* **Script para crear la base de datos desde cero (CrearDB.sql)**  
 Incluye la creación de todas las tablas, types, procedimientos, funciones y triggers
