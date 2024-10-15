@@ -18,3 +18,23 @@ BEGIN
 		set Activo = 1
 		where UsuarioId IN ( select UsuarioId from inserted where Confirmado = 1 )
 END
+
+
+-- Cuando un usuario abra una notificacion relacionada al recibir un Me Gusta o un Seguimiento:
+-- Se agrega la fecha y hora de esa acción.
+-- Esto tiene como finalidad, que luego mediante un Job, se eliminen luego de pasadas 24 horas
+CREATE TRIGGER trg_Notificacion_FechaVista
+ON Notificaciones
+AFTER Update
+AS
+BEGIN
+	SET NOCOUNT ON
+
+	Update n
+	set FechaVista = GETDATE()
+	from Notificaciones n
+	join inserted i on i.NotificacionId = n.NotificacionId
+	join deleted d on d.NotificacionId = n.NotificacionId
+	where i.Estado = 1 and d.Estado = 0
+	-- El where asegura que es un caso en que la notificacion pasa de no vista (0) a vista (1)
+END

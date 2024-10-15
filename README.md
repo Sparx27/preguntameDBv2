@@ -2,7 +2,7 @@
 Archivos .sql extraídos de mi solución hecha en SQL Server Management Studio
 
 Implementa:
-* **Creación de tablas y sus relaciones**
+* **Creación de tablas y sus relaciones en tercera forma normal**
 
 * **Types para algunos campos que repiten su formato**  
 Ej: el tipo de variable "descripcion" (nvarchar(300) not null) que es el estándar para Preguntas y Respuestas
@@ -15,3 +15,9 @@ Ej: contar MeGustas y Seguimientos hechos por un Usuario => utilizada en un SP q
 
 * **Triggers**  
 Ej: cuando en un Usuario, su atributo Confirmado pasa de 0 a 1, su atributo Activo pasa de 0 a 1 también.
+
+* **Jobs**  
+Ej: Para eliminar Notificaciones que ya hayan sido vistas y haya pasado un cierto tiempo.
+
+* **Script para crear la base de datos desde cero**  
+Incluye la creación de todas las tablas, types, procedimientos, funciones y triggers

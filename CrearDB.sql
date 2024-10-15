@@ -121,8 +121,9 @@ GO
 CREATE TABLE Notificaciones(
 	NotificacionId uniqueidentifier DEFAULT NEWID(),
 	UsuarioId uniqueidentifier,
-	Estado bit DEFAULT 0 NOT NULL,
 	Fecha datetime DEFAULT GETDATE() NOT NULL,
+	Estado bit DEFAULT 0 NOT NULL,
+	FechaVista datetime,
 	Tipo char(1) NOT NULL,
 	S_Usuario_Seguido uniqueidentifier,
 	S_Usuario_Seguidor uniqueidentifier,
@@ -139,7 +140,11 @@ CREATE TABLE Notificaciones(
 		REFERENCES Seguimientos(Usuario_Seguido, Usuario_Seguidor),
 	CONSTRAINT FK_Notificaciones_MeGustas FOREIGN KEY(M_RespuestaId, M_UsuarioId)
 		REFERENCES MeGustas(RespuestaId, UsuarioId),
+
+	-- Asegurar una sola notificación por Seguimiento
 	CONSTRAINT UQ_Notificaciones_Seguimientos UNIQUE (S_Usuario_Seguido, S_Usuario_Seguidor, Tipo),
+
+	-- Asegurar una sola notificación por MeGusta
 	CONSTRAINT UQ_Notificaciones_MeGustas UNIQUE (M_RespuestaId, M_UsuarioId, Tipo)
 )
 GO
@@ -205,6 +210,23 @@ BEGIN
 		Update Usuarios
 		set Activo = 1
 		where UsuarioId IN ( select UsuarioId from inserted where Confirmado = 1 )
+END
+GO
+
+CREATE TRIGGER trg_Notificacion_FechaVista
+ON Notificaciones
+AFTER Update
+AS
+BEGIN
+	SET NOCOUNT ON
+
+	Update n
+	set FechaVista = GETDATE()
+	from Notificaciones n
+	join inserted i on i.NotificacionId = n.NotificacionId
+	join deleted d on d.NotificacionId = n.NotificacionId
+	where i.Estado = 1 and d.Estado = 0
+	-- El where asegura que es un caso en que la notificacion pasa de no vista (0) a vista (1)
 END
 GO
 -- FIN TRIGGERS --
@@ -392,6 +414,18 @@ BEGIN
 			PRINT 'Error en la ejecución'
 		END
 	END CATCH
+END
+GO
+
+CREATE PROCEDURE SP_D_Notificaciones_Vistas
+AS
+BEGIN
+	SET NOCOUNT ON
+
+	Delete from Notificaciones
+	where Estado = 1 and
+				FechaVista < dateadd(hour, -24, getdate())
+
 END
 GO
 -- FIN STORED PROCEDURES -- 

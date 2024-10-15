@@ -23,16 +23,3 @@ BEGIN
 			and u.NombreUsuario = @NombreUsuario
 	)
 END
-
-
-
-
-
-
-
-
-
-
-
-exec SP_S_TopUsuariosActivos
-

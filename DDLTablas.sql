@@ -112,8 +112,9 @@ CREATE TABLE MeGustas(
 CREATE TABLE Notificaciones(
 	NotificacionId uniqueidentifier DEFAULT NEWID(),
 	UsuarioId uniqueidentifier,
-	Estado bit DEFAULT 0 NOT NULL,
 	Fecha datetime DEFAULT GETDATE() NOT NULL,
+	Estado bit DEFAULT 0 NOT NULL,
+	FechaVista datetime,
 	Tipo char(1) NOT NULL,
 	S_Usuario_Seguido uniqueidentifier,
 	S_Usuario_Seguidor uniqueidentifier,
