@@ -229,6 +229,21 @@ BEGIN
 	-- El where asegura que es un caso en que la notificacion pasa de no vista (0) a vista (1)
 END
 GO
+
+CREATE TRIGGER trg_Borrar_Respuesta_JuntoA_Pregunta
+ON Respuestas
+AFTER Delete
+AS
+BEGIN
+	SET NOCOUNT ON
+
+	Delete from Preguntas
+	where PreguntaId IN (
+		select PreguntaId
+		from deleted
+	)
+END
+GO
 -- FIN TRIGGERS --
 
 
